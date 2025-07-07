@@ -26,6 +26,7 @@ import inspect
 from bs4 import BeautifulSoup
 import pprint as pprint
 import json
+from tqdm.auto import tqdm
 
 
 sys.path.extend(['//fs1/dept/trading/specialsituations/Working/MARIO/SEC/scripts/'])
@@ -38,17 +39,20 @@ from agents import Agent, Runner, ModelSettings, FileSearchTool
 from EdgarCache.Client.Client import Client as EdgarCacheClient
 from EdgarCache.Sec.Util import Util
 from EdgarCache.Sec.Submissions import Submission, Submissions
+from SEC_utils import SubmissionPage # type: ignore
+from datetime import datetime as dt
 
 from tqdm.auto import tqdm
 
 from models import FullBalanceSheet
-from tools  import extract_doc_urls, create_vector_store, make_file_search_tool
+from tools  import extract_doc_urls, create_vector_store, make_file_search_tool, get_all_sub_filings, create_vector_store_for_updates
 from my_agents import (                     # imported from package
     make_assets_agent,
     make_liabilities_agent,
     make_equity_agent,
     make_assembler_agent,
-    make_expander_agent
+    make_expander_agent,
+    make_update_agent
 )
 
 
@@ -64,12 +68,20 @@ async def build_balance_sheet(
     Returns a validated FullBalanceSheet object.
     """
 
+    page = SubmissionPage(edgarCache=ec,url=index_url)
+    filingDate = f"{page.metadata.get('Filing Date'):%Y-%m-%d}"
+    name = page.filers[0].get('name')
+    period = f"{page.metadata.get('Period of Report'):%Y-%m-%d}"
 
     doc_urls = [url for url in Util.GetRelatedUrls(str(ec.Get(index_url).content).replace("/ix?doc=",""))]
+
+    pbar = tqdm(total=9, desc="Build balance sheet")
 
     # 2. Vector store (group all docs under one store)
     vs = create_vector_store(ec, name=f"{cik}_10Q_vector", urls=doc_urls,
                              client=openai_client)
+    
+    pbar.update(1)
 
     tool = make_file_search_tool(vs.id, max_k=12)
 
@@ -81,6 +93,8 @@ async def build_balance_sheet(
 
     prompt = "Return the most recent balance sheet."
 
+    pbar.update(1)
+
     # 4. Run the three section agents in parallel
     async with asyncio.TaskGroup() as tg:
         t_assets      = tg.create_task(Runner.run(assets_agent,      prompt))
@@ -91,7 +105,7 @@ async def build_balance_sheet(
     liabilities_tbl = t_liabilities.result().final_output
     equity_tbl      = t_equity.result().final_output
 
-
+    pbar.update(1)
     expander = make_expander_agent(tool)
 
     async with asyncio.TaskGroup() as tg:
@@ -103,13 +117,14 @@ async def build_balance_sheet(
     liabilities_tbl = (await tl).final_output
     equity_tbl      = (await te).final_output
 
+    pbar.update(1)
     # 5. Assemble
     
     assembler_payload ={
-            "company_name": None,     # can be parsed from index_html if needed
+            "company_name": name,     # can be parsed from index_html if needed
             "cik":          str(cik),
-            "filing_date":  None,
-            "period_end":   None,
+            "filing_date":  filingDate,
+            "period_end":   period,
             "assets_table":      assets_tbl.model_dump(),
             "liabilities_table": liabilities_tbl.model_dump(),
             "equity_table":      equity_tbl.model_dump()
@@ -125,7 +140,54 @@ async def build_balance_sheet(
 
 
     full_bs = assembled.final_output
+    pbar.update(1)
 
+    format_string = "%Y,%m,%d"
+    
+    sub_urls_index = get_all_sub_filings(ec, cik,dt.strptime(f'{page.metadata.get("Filing Date"):%Y,%m,%d}',format_string).date())
+    sub_urls = []
+    for url in sub_urls_index:
+        sub_urls.append([u for u in Util.GetRelatedUrls(str(ec.Get(url).content).replace("/ix?doc=",""))])
+    
+    vs_updates = create_vector_store_for_updates(ec, name=f"{cik}_updates_vector", urls=sub_urls,
+                                                  client=openai_client)
+    
+    pbar.update(1)
+
+    tool_updates = make_file_search_tool(vs_updates.id, max_k=12)
+    update_agent = make_update_agent(tool_updates)
+
+    pbar.update(1)
+
+    async with asyncio.TaskGroup() as tg:
+        t_updates = tg.create_task(Runner.run(update_agent, full_bs.model_dump_json()))
+    
+    update_table = (await t_updates).final_output
+
+    return update_table
+
+    pbar.update(1)
+    assembler_payload = {
+        "company_name": name,
+        "cik":          str(cik),
+        "filing_date":  filingDate,
+        "period_end":   period,
+        "assets_table":      assets_tbl.model_dump(),
+        "liabilities_table": liabilities_tbl.model_dump(),
+        "equity_table":      equity_tbl.model_dump(),
+        "update_table":      update_table.model_dump()
+    }
+    assembled = await Runner.run(
+        assembler_agent,
+        [
+            {"role":"user", "content": json.dumps(assembler_payload)}
+        ]
+    )
+
+    full_bs = assembled.final_output
+
+    pbar.update(1)
+    
     # 6. Optional: delete vector store to save quota
     # openai_client.vector_stores.delete(vs.id)
 

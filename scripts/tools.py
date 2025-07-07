@@ -78,6 +78,8 @@ file search tool wrapper, HTML utils, etc.
 import io
 import os
 import re
+import datetime as dt
+from datetime import date
 from typing import Iterable, List
 
 import bs4
@@ -86,6 +88,7 @@ from openai.types import VectorStore
 
 from agents import FileSearchTool  # ← your wrapper from the prototype
 from EdgarCache.Client.Client import Client as EdgarCacheClient
+from EdgarCache.Sec.Submissions import Submission, Submissions
 from settings import get_openai_client  # ← your OpenAI client from settings.py
 
 # ---------------------------------------------------------------------------
@@ -136,8 +139,7 @@ def create_vector_store(
 
     tmp = []
     for u in urls:
-        u = format_for_openai(u)
-        if not u.endswith('.xsd') and not u.endswith('.xml'):
+        if not u.endswith('.xsd') and not u.endswith('.xml') and not u.endswith('.jpg'):
             tmp.append(u)
     urls = tmp
 
@@ -145,6 +147,33 @@ def create_vector_store(
     client.vector_stores.file_batches.upload_and_poll(vector_store_id=vs.id,
                                                       files=files)
     return vs
+
+def create_vector_store_for_updates(
+        ec: EdgarCacheClient,
+        name: str,
+        urls: Iterable[str],
+        client: openai.OpenAI | None = None
+) -> VectorStore:
+    """
+    1. downloads each URL via EdgarCache
+    2. creates an OpenAI vector-store
+    3. uploads all documents and blocks until ready
+    """
+    client = client or get_openai_client()
+    vs = client.vector_stores.create(name=name)
+
+    tmp = []
+    for sublist in urls:
+        for u in sublist:
+            if not u.endswith('.xsd') and not u.endswith('.xml') and not u.endswith('.jpg'):
+                tmp.append(u)
+    urls = tmp
+
+    files = [_VectorStoreItem(ec.Get(u).content, u).as_file() for u in urls]
+    client.vector_stores.file_batches.upload_and_poll(vector_store_id=vs.id,
+                                                      files=files)
+    return vs
+
 
 
 # ---------------------------------------------------------------------------
@@ -179,9 +208,20 @@ def get_plain_text(html: bytes) -> str:
 # 4.  Build a FileSearchTool in one line
 # ---------------------------------------------------------------------------
 
-def make_file_search_tool(vs_id: str, max_k: int = 6) -> FileSearchTool:
+def make_file_search_tool(vs_id: str, max_k: int = 12) -> FileSearchTool:
     return FileSearchTool(
         max_num_results=max_k,
         vector_store_ids=[vs_id],
         include_search_results=False
     )
+
+def get_all_sub_filings(client: EdgarCacheClient, cik: int, start: dt.date = dt.date(2000, 1, 1)) -> List[str]:
+    """
+    Returns a list of all filings for a given CIK after a given date.
+    """
+    submissions: dict[str,Submission]=Submissions.load(client=client,cik=1045810,formFilter=None,start=start).items
+
+    urls = []
+    for sub in submissions.values():
+        urls.append(sub.getLink())
+    return urls
