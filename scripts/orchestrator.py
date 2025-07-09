@@ -61,11 +61,12 @@ async def build_balance_sheet(
         index_url: str,
         ec: EdgarCacheClient,
         openai_client=None
-) -> FullBalanceSheet:
+) -> tuple[FullBalanceSheet, FullBalanceSheet]:
     """
     Main entry-point called by CLI / notebooks.
 
-    Returns a validated FullBalanceSheet object.
+    Returns both the fully expanded balance sheet from the filing and the
+    pro forma balance sheet with subsequent updates applied.
     """
 
     page = SubmissionPage(edgarCache=ec,url=index_url)
@@ -160,35 +161,12 @@ async def build_balance_sheet(
     pbar.update(1)
 
     async with asyncio.TaskGroup() as tg:
-        t_updates = tg.create_task(Runner.run(update_agent, full_bs.model_dump_json()))
+        t_updates = tg.create_task(
+            Runner.run(update_agent, full_bs.model_dump_json())
+        )
     
-    update_table = (await t_updates).final_output
-
-    return update_table
+    updated_bs = (await t_updates).final_output
 
     pbar.update(1)
-    assembler_payload = {
-        "company_name": name,
-        "cik":          str(cik),
-        "filing_date":  filingDate,
-        "period_end":   period,
-        "assets_table":      assets_tbl.model_dump(),
-        "liabilities_table": liabilities_tbl.model_dump(),
-        "equity_table":      equity_tbl.model_dump(),
-        "update_table":      update_table.model_dump()
-    }
-    assembled = await Runner.run(
-        assembler_agent,
-        [
-            {"role":"user", "content": json.dumps(assembler_payload)}
-        ]
-    )
 
-    full_bs = assembled.final_output
-
-    pbar.update(1)
-    
-    # 6. Optional: delete vector store to save quota
-    # openai_client.vector_stores.delete(vs.id)
-
-    return full_bs
+    return full_bs, updated_bs

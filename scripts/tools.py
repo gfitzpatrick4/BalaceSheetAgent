@@ -89,6 +89,7 @@ from openai.types import VectorStore
 from agents import FileSearchTool  # ← your wrapper from the prototype
 from EdgarCache.Client.Client import Client as EdgarCacheClient
 from EdgarCache.Sec.Submissions import Submission, Submissions
+from models import FullBalanceSheet
 from settings import get_openai_client  # ← your OpenAI client from settings.py
 
 # ---------------------------------------------------------------------------
@@ -143,7 +144,13 @@ def create_vector_store(
             tmp.append(u)
     urls = tmp
 
-    files = [_VectorStoreItem(ec.Get(u).content, u).as_file() for u in urls]
+    files = []
+    for u in urls:
+        content = ec.Get(u).content
+        if content:
+            files.append(_VectorStoreItem(content, u).as_file())
+    if not files:
+        raise ValueError(f"No valid files found in URLs: {urls}")
     client.vector_stores.file_batches.upload_and_poll(vector_store_id=vs.id,
                                                       files=files)
     return vs
@@ -169,7 +176,13 @@ def create_vector_store_for_updates(
                 tmp.append(u)
     urls = tmp
 
-    files = [_VectorStoreItem(ec.Get(u).content, u).as_file() for u in urls]
+    files = []
+    for u in urls:
+        content = ec.Get(u).content
+        if content:
+            files.append(_VectorStoreItem(content, u).as_file())
+    if not files:
+        raise ValueError(f"No valid files found in URLs: {urls}")
     client.vector_stores.file_batches.upload_and_poll(vector_store_id=vs.id,
                                                       files=files)
     return vs
@@ -219,9 +232,10 @@ def get_all_sub_filings(client: EdgarCacheClient, cik: int, start: dt.date = dt.
     """
     Returns a list of all filings for a given CIK after a given date.
     """
-    submissions: dict[str,Submission]=Submissions.load(client=client,cik=1045810,formFilter=None,start=start).items
+    submissions: dict[str,Submission]=Submissions.load(client=client,cik=cik,formFilter=None,start=start).items
 
     urls = []
     for sub in submissions.values():
         urls.append(sub.getLink())
     return urls
+

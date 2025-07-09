@@ -27,6 +27,14 @@ class BalanceSheetLine(BaseModel):
 
     model_config = {"extra": "forbid"}
 
+    @property
+    def total_value(self) -> float:
+        """recursively sum this line and any sub-components."""
+        subtotal = self.value or 0.0
+        if self.components:
+            subtotal += sum(c.total_value for c in self.components)
+        return subtotal
+
 
 class SectionTable(BaseModel):
     """
@@ -42,7 +50,7 @@ class SectionTable(BaseModel):
         """
         Convenience: sum of individual line values if subtotal is missing.
         """
-        return self.subtotal or sum(l.value for l in self.lines)
+        return sum(l.total_value for l in self.lines)
 
 
 class FullBalanceSheet(BaseModel):
@@ -64,9 +72,12 @@ class FullBalanceSheet(BaseModel):
     @property
     def equity(self) -> SectionTable:
         return next(t for t in self.tables if t.section == 'equity')
+    def balance_difference(self) -> float:
+        """return assets minus (liabilites + equity) using computed totals"""
+        return self.assets.total - (self.liabilities.total + self.equity.total)
 
     @property
     def balanced(self) -> bool:
-        return abs(self.assets.total - (self.liabilities.total + self.equity.total)) < 0.01
+        return abs(self.balance_difference()) < 0.01
     
 BalanceSheetLine.model_rebuild()

@@ -156,9 +156,8 @@ def _parse_args() -> argparse.Namespace:
 
 async def _main_cli():
     args = _parse_args()
-    bs = await build_balance_sheet_async(args.cik, args.index_url)
-    pprint.pprint(bs)
-    pretty_print(bs)
+    initial_bs, updated_bs = await build_balance_sheet_async(args.cik, args.index_url)
+    pretty_print(initial_bs, updated_bs)
 
 
 if __name__ == "__main__":

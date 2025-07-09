@@ -49,7 +49,7 @@ def make_section_agent(
     agent = Agent(
         name          = f"{section.capitalize()}Agent",
         model         = 'o3',   # or whatever default you want
-        #model_settings= ModelSettings(temperature=0.1),
+        model_settings= ModelSettings(reasoning={'effort':'high'}),
         output_type   = SectionTable,
         instructions  = prompt,
         tools         = [tool]

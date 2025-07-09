@@ -49,3 +49,9 @@ def main() -> None:
 if __name__ == '__main__':
     freeze_support()   # does nothing on *nix, required on Windows freeze/pyinstaller
     main()
+
+
+
+
+# build_balance_sheet.py 1849635 https://www.sec.gov/Archives/edgar/data/1849635/000114036125018209/0001140361-25-018209-index.html
+# build_balance_sheet.py 1687542 https://www.sec.gov/Archives/edgar/data/1687542/000164117225011165/0001641172-25-011165-index.html
