@@ -67,3 +67,18 @@ def pretty_print(original: FullBalanceSheet, updated: FullBalanceSheet | None = 
         print("✓ Balanced (Assets = Liab + Equity)\n")
     else:
         print("⚠ NOT balanced! Check totals.\n")
+
+    if getattr(updated, "applied_updates", None):
+        print("Applied Updates:\n")
+        rows = [
+            [c.date, c.citation] for c in updated.applied_updates
+        ]
+        print(tabulate(rows, headers=["Date", "Citation"], tablefmt="github"))
+        print()
+
+    if getattr(updated, "update_errors", None):
+        print("Unresolved Updates:\n")
+        rows = [
+            [e.change.date, e.reason] for e in updated.update_errors
+        ]
+        print(tabulate(rows, headers=["Date", "Reason"], tablefmt="github"))
