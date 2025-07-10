@@ -78,7 +78,13 @@ def pretty_print(original: FullBalanceSheet, updated: FullBalanceSheet | None = 
 
     if getattr(updated, "update_errors", None):
         print("Unresolved Updates:\n")
-        rows = [
-            [e.change.date, e.reason] for e in updated.update_errors
-        ]
-        print(tabulate(rows, headers=["Date", "Reason"], tablefmt="github"))
+        rows = []
+        for err in updated.update_errors:
+            ch = err.attempted_fix or err.change
+            deltas = "; ".join(
+                f"{d.section}:{d.line_item} {d.delta:+,.0f}" for d in ch.deltas
+            )
+            rows.append([err.change.date, deltas, ch.citation, err.reason])
+
+        headers = ["Date", "Attempted Deltas", "Citation", "Reason"]
+        print(tabulate(rows, headers=headers, tablefmt="github"))
