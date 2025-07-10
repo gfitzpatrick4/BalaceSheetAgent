@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field, computed_field
 class BalanceSheetLine(BaseModel):
     line_item:  str
     value:      float                # always in whole USD, never “in thousands”
-    unit:       Literal['USD'] = 'USD'
+    unit:       Literal['USD', 'shares'] = 'USD'
     as_of_date: Optional[str] = None  # yyyy-mm-dd if available
     note_ref:   Optional[str] = None  # e.g. '(1)', 'See Note 4'
     components: list["BalanceSheetLine"] | None = None   # NEW
@@ -59,6 +59,10 @@ class FullBalanceSheet(BaseModel):
     filing_date:  str               # date the 10-Q/10-K was filed
     period_end:   Optional[str]     # ‘As of’ date from the statement
     tables:       List[SectionTable]
+    shares_outstanding_common: Optional[int] = None
+    shares_outstanding_preferred: Optional[int] = None
+    update_errors: list["FailedChange"] | None = None
+    applied_updates: list["FilingChange"] | None = None
 
     # helper getters
     @property
@@ -79,5 +83,35 @@ class FullBalanceSheet(BaseModel):
     @property
     def balanced(self) -> bool:
         return abs(self.balance_difference()) < 0.01
-    
+
 BalanceSheetLine.model_rebuild()
+
+
+class BalanceSheetDelta(BaseModel):
+    section: Literal['assets', 'liabilities', 'equity']
+    line_item: str
+    delta: float
+
+
+class FilingChange(BaseModel):
+    date: str
+    deltas: List[BalanceSheetDelta]
+    citation: str
+
+
+class FailedChange(BaseModel):
+    """Represents an update that could not be applied without causing an imbalance."""
+    change: FilingChange
+    attempted_fix: FilingChange | None = None
+    reason: str
+
+
+class UpdateSummary(BaseModel):
+    changes: List[FilingChange]
+    total_common_shares: Optional[int] = None
+    total_preferred_shares: Optional[int] = None
+
+
+FullBalanceSheet.model_rebuild()
+
+
