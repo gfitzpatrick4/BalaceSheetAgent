@@ -140,7 +140,7 @@ def create_vector_store(
 
     tmp = []
     for u in urls:
-        if not u.endswith('.xsd') and not u.endswith('.xml') and not u.endswith('.jpg'):
+        if not u.endswith('.xsd') and not u.endswith('.xml') and not u.endswith('.jpg') and not u.endswith('.gif'):
             tmp.append(u)
     urls = tmp
 
@@ -172,7 +172,7 @@ def create_vector_store_for_updates(
     tmp = []
     for sublist in urls:
         for u in sublist:
-            if not u.endswith('.xsd') and not u.endswith('.xml') and not u.endswith('.jpg'):
+            if not u.endswith('.xsd') and not u.endswith('.xml') and not u.endswith('.jpg') and not u.endswith('.gif'):
                 tmp.append(u)
     urls = tmp
 

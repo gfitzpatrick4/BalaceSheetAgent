@@ -45,8 +45,8 @@ from datetime import datetime as dt
 from tqdm.auto import tqdm
 
 from models import FullBalanceSheet, UpdateSummary
-from apply_updates import apply_updates
 from tools  import extract_doc_urls, create_vector_store, make_file_search_tool, get_all_sub_filings, create_vector_store_for_updates
+from apply_updates import  apply_updates
 from my_agents import (                     # imported from package
     make_assets_agent,
     make_liabilities_agent,
@@ -73,7 +73,16 @@ async def build_balance_sheet(
 
     page = SubmissionPage(edgarCache=ec,url=index_url)
     filingDate = f"{page.metadata.get('Filing Date'):%Y-%m-%d}"
-    name = page.filers[0].get('name')
+    if page.filers:
+        first = page.filers[0]
+        if isinstance(first, dict):
+            name = first.get('name') or first.get('company_name')
+        else:
+            name = getattr(first, "company_name", None) or getattr(first, "name", None)
+    else:
+        name = None
+    if not name:
+        name = str(cik)
     period = f"{page.metadata.get('Period of Report'):%Y-%m-%d}"
 
     doc_urls = [url for url in Util.GetRelatedUrls(str(ec.Get(index_url).content).replace("/ix?doc=",""))]
@@ -159,7 +168,7 @@ async def build_balance_sheet(
 
     tool_updates = make_file_search_tool(vs_updates.id, max_k=12)
     update_agent = make_update_agent(tool_updates)
-    fix_agent    = make_fix_agent(tool_updates)
+    fix_agent = make_fix_agent(tool_updates) 
 
     pbar.update(1)
 
@@ -167,7 +176,7 @@ async def build_balance_sheet(
         t_updates = tg.create_task(
             Runner.run(update_agent, full_bs.model_dump_json())
         )
-
+    
     updates: UpdateSummary = (await t_updates).final_output
 
     updated_bs = await apply_updates(full_bs, updates, fixer=fix_agent)

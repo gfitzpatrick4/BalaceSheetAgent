@@ -20,8 +20,11 @@ def pretty_print(original: FullBalanceSheet, updated: FullBalanceSheet | None = 
     """Print one or two balance sheets in a readable table."""
 
     if updated is None:
-        print(f"\n{original.company_name}   CIK {original.cik}")
-        print(f"Filing date: {original.filing_date}   Period end: {original.period_end}\n")
+        try:
+            print(f"\n{original.company_name}   CIK {original.cik}")
+            print(f"Filing date: {original.filing_date}   Period end: {original.period_end}\n")
+        except Exception as e:
+            print("Multiple filers.")
 
         for section in original.tables:
             print(section.section.upper())
@@ -67,18 +70,16 @@ def pretty_print(original: FullBalanceSheet, updated: FullBalanceSheet | None = 
         print("✓ Balanced (Assets = Liab + Equity)\n")
     else:
         print("⚠ NOT balanced! Check totals.\n")
-
-    if getattr(updated, "applied_updates", None):
-        print("Applied Updates:\n")
-        rows = [
-            [c.date, c.citation] for c in updated.applied_updates
-        ]
-        print(tabulate(rows, headers=["Date", "Citation"], tablefmt="github"))
-        print()
-
-    if getattr(updated, "update_errors", None):
-        print("Unresolved Updates:\n")
-        rows = [
-            [e.change.date, e.reason] for e in updated.update_errors
-        ]
-        print(tabulate(rows, headers=["Date", "Reason"], tablefmt="github"))
+    
+    if getattr(updated,"update_errors", None):
+        print("Unresolved Updates: \n")
+        rows = []
+        for err in updated.update_errors:
+            ch = err.attempted_fix or err.change
+            deltas = "; ".join(
+                f"{d.section}:{d.line_item}{d.delta:+,.0f}" for d in ch.deltas
+            )
+            rows.append([err.change.date, deltas, ch.citation, err.reason])
+        
+        headers = ["Date", "Attemped Deltas", "Citation", "Reason"]
+        print(tabulate(rows,headers=headers,tablefmt="github"))

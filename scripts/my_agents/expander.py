@@ -5,7 +5,7 @@ def make_expander_agent(tool):
     return Agent(
         name="NoteExpander",
         model="o3",
-        model_settings=ModelSettings(),
+        model_settings=ModelSettings(reasoning={'effort':'high'}),
         output_type=FullBalanceSheet,
         instructions=_PROMPT,
         tools=[tool],

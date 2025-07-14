@@ -83,21 +83,18 @@ class FullBalanceSheet(BaseModel):
     @property
     def balanced(self) -> bool:
         return abs(self.balance_difference()) < 0.01
-
+    
 BalanceSheetLine.model_rebuild()
 
-
 class BalanceSheetDelta(BaseModel):
-    section: Literal['assets', 'liabilities', 'equity']
+    section: Literal['assets','liabilities','equity']
     line_item: str
     delta: float
-
 
 class FilingChange(BaseModel):
     date: str
     deltas: List[BalanceSheetDelta]
     citation: str
-
 
 class FailedChange(BaseModel):
     """Represents an update that could not be applied without causing an imbalance."""
@@ -105,13 +102,9 @@ class FailedChange(BaseModel):
     attempted_fix: FilingChange | None = None
     reason: str
 
-
 class UpdateSummary(BaseModel):
     changes: List[FilingChange]
     total_common_shares: Optional[int] = None
     total_preferred_shares: Optional[int] = None
 
-
 FullBalanceSheet.model_rebuild()
-
-

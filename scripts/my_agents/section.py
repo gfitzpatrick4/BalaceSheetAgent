@@ -31,6 +31,7 @@ Return JSON that matches the SectionTable schema.  Requirements:
 5. Do not invent numbers or line items. If a number is missing, try again until you find it. 
 6. If there is a line item that represents a sum of smaller items, such as other, net, misc., search the whole document for the relevant details and include them
 as separate line items in the output.
+7. In the final output, do not include the Total of the entire section. 
 """
 
 def make_section_agent(

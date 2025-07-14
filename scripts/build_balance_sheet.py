@@ -114,6 +114,7 @@ async def build_balance_sheet_async(
     -------
     Any   # whatever `orchestrator.build_balance_sheet` returns
     """
+    print("Running async")
     ec = EC(ec_host, ec_port)          # you can also `async with EC(...)`
     return await _orchestrator_build_balance_sheet(cik, index_url, ec)
 
@@ -137,7 +138,7 @@ def get_balance_sheet(
     >>> bs = get_balance_sheet(1849635, some_url, pretty=True)
     """
     result = asyncio.run(
-        build_balance_sheet_async(cik, index_url, ec_host, ec_port)
+        build_balance_sheet_async(cik, index_url)
     )
     if pretty:
         pretty_print(result)

@@ -59,21 +59,19 @@ async def apply_updates(
             )
             corrected: FilingChange = resp.final_output
 
-            bs = snapshot.model_copy(deep=True)
+            bs_corrected = snapshot.model_copy(deep=True)
             for delta in corrected.deltas:
-                _apply_delta(bs, delta)
+                _apply_delta(bs_corrected, delta)
 
             if bs.balanced:
                 applied.append(corrected)
                 continue
 
             failed.append(
-                FailedChange(change=change, attempted_fix=corrected, reason="still unbalanced")
+                FailedChange(change=change, attempted_fix=corrected, reason=f"still unbalanced by {bs_corrected.balance_difference():.2f}")
             )
-            bs = snapshot
         else:
             failed.append(FailedChange(change=change, reason="unbalanced"))
-            bs = snapshot
 
     bs.shares_outstanding_common = summary.total_common_shares
     bs.shares_outstanding_preferred = summary.total_preferred_shares
