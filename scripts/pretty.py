@@ -13,8 +13,9 @@ def _delta_summary(delta: BalanceSheetDelta) -> str:
         ("equity", delta.equity),
     ):
         for entry in entries:
-            for item, val in entry.items():
-                parts.append(f"{section_name}:{item}{val:+,.0f}")
+            parts.append(
+                f"{section_name}:{entry.line_item}{entry.value:+,.0f}"
+            )
     return "; ".join(parts)
 
 

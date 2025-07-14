@@ -228,7 +228,7 @@ def make_file_search_tool(vs_id: str, max_k: int = 12) -> FileSearchTool:
         include_search_results=False
     )
 
-def get_all_sub_filings(client: EdgarCacheClient, cik: int, start: dt.date = dt.date(2000, 1, 1)) -> List[str]:
+def get_all_sub_filings(client: EdgarCacheClient, cik: int, start: dt.date) -> List[str]:
     """
     Returns a list of all filings for a given CIK after a given date.
     """

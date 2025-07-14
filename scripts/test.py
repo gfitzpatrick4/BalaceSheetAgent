@@ -84,3 +84,4 @@ if __name__ == '__main__':
 # build_balance_sheet.py 1571934 https://www.sec.gov/Archives/edgar/data/1571934/000141057825001327/0001410578-25-001327-index.html
 # build_balance_sheet.py 1853825 https://www.sec.gov/Archives/edgar/data/1853825/000164117225011020/0001641172-25-011020-index.html
 # build_balance_sheet.py 1775194 https://www.sec.gov/Archives/edgar/data/1775194/000147793225003866/0001477932-25-003866-index.html
+# build_balance_sheet.py 1106838 https://www.sec.gov/Archives/edgar/data/1106838/000164117225009857/0001641172-25-009857-index.html

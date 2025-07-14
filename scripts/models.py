@@ -86,21 +86,28 @@ class FullBalanceSheet(BaseModel):
     
 BalanceSheetLine.model_rebuild()
 
+class DeltaEntry(BaseModel):
+    """Single line-item change in a BalanceSheetDelta."""
+
+    line_item: str
+    value: float
+    model_config = {"extra":"forbid"}
+
 class BalanceSheetDelta(BaseModel):
     """Represents a single balanced change to the balance sheet."""
 
-    assets:      List[dict[str, float]] = Field(default_factory=list)
-    liabilities: List[dict[str, float]] = Field(default_factory=list)
-    equity:      List[dict[str, float]] = Field(default_factory=list)
+    assets:      List[DeltaEntry] = Field(default_factory=list)
+    liabilities: List[DeltaEntry] = Field(default_factory=list)
+    equity:      List[DeltaEntry] = Field(default_factory=list)
 
     def sum_assets(self) -> float:
-        return sum(v for d in self.assets for v in d.values())
+        return sum(e.value for e in self.assets)
 
     def sum_liabilities(self) -> float:
-        return sum(v for d in self.liabilities for v in d.values())
+        return sum(e.value for e in self.liabilities)
 
     def sum_equity(self) -> float:
-        return sum(v for d in self.equity for v in d.values())
+        return sum(e.value for e in self.equity)
 
     @property
     def balanced(self) -> bool:

@@ -38,7 +38,9 @@ Final Checks:
 
 * No row (other than the final section subtotal) may represent the sum of two or more other rows in rows.
 * No row is a "gross" or "net", if so, re check the filing for the components that make up that row, and replace it with the components.
+* No row is a an earlier version of another row (i.e. Only 2025 values or the value closest to the date of the filing )
 * The sum of all non-null value fields must equal the original section subtotal.
+
 
 Now read the input SectionTable JSON and the filing, perform the above steps, and emit the revised SectionTable JSON.
 '''

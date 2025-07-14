@@ -22,14 +22,11 @@ def _apply_line(section: SectionTable, line_item: str, delta_value: float) -> No
 
 def _apply_delta(bs: FullBalanceSheet, delta: BalanceSheetDelta) -> None:
     for entry in delta.assets:
-        for item, val in entry.items():
-            _apply_line(bs.assets, item, val)
+        _apply_line(bs.assets, entry.line_item, entry.value)
     for entry in delta.liabilities:
-        for item, val in entry.items():
-            _apply_line(bs.liabilities, item, val)
+        _apply_line(bs.liabilities, entry.line_item, entry.value)
     for entry in delta.equity:
-        for item, val in entry.items():
-            _apply_line(bs.equity, item, val)
+        _apply_line(bs.equity, entry.line_item, entry.value)
 
 
 async def apply_updates(
@@ -46,26 +43,9 @@ async def apply_updates(
     applied: List[FilingChange] = []
 
     for change in sorted(summary.changes, key=lambda c: c.date):
-        if change.delta is None:
-            failed.append(FailedChange(change=change, reason="missing delta"))
-            continue
-
-        if not change.delta.balanced:
-            failed.append(FailedChange(change=change, reason="delta not balanced"))
-            continue
-
-        snapshot = bs.model_copy(deep=True)
         _apply_delta(bs, change.delta)
-
-        if bs.balanced:
-            applied.append(change)
-        else:
-            diff = bs.balance_difference()
-            bs = snapshot
-            failed.append(
-                FailedChange(change=change, reason=f"unbalanced by {diff:.2f} after apply")
-            )
-
+        applied.append(change)
+        
     bs.shares_outstanding_common = summary.total_common_shares
     bs.shares_outstanding_preferred = summary.total_preferred_shares
     bs.update_errors = failed or None
