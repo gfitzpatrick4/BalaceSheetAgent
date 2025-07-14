@@ -44,7 +44,7 @@ from datetime import datetime as dt
 
 from tqdm.auto import tqdm
 
-from models import FullBalanceSheet, UpdateSummary
+from models import FullBalanceSheet, UpdateSummary, BalanceSheetDeltaList
 from tools  import extract_doc_urls, create_vector_store, make_file_search_tool, get_all_sub_filings, create_vector_store_for_updates
 from apply_updates import  apply_updates
 from my_agents import (                     # imported from package
@@ -54,7 +54,7 @@ from my_agents import (                     # imported from package
     make_assembler_agent,
     make_expander_agent,
     make_update_agent,
-    make_fix_agent
+    make_accountant_agent
 )
 
 
@@ -168,7 +168,7 @@ async def build_balance_sheet(
 
     tool_updates = make_file_search_tool(vs_updates.id, max_k=12)
     update_agent = make_update_agent(tool_updates)
-    fix_agent = make_fix_agent(tool_updates) 
+    accountant_agent = make_accountant_agent(tool_updates)
 
     pbar.update(1)
 
@@ -176,10 +176,16 @@ async def build_balance_sheet(
         t_updates = tg.create_task(
             Runner.run(update_agent, full_bs.model_dump_json())
         )
-    
+
     updates: UpdateSummary = (await t_updates).final_output
 
-    updated_bs = await apply_updates(full_bs, updates, fixer=fix_agent)
+    accountant_resp = await Runner.run(accountant_agent, updates.model_dump_json())
+    delta_list: BalanceSheetDeltaList = accountant_resp.final_output
+
+    for ch, delta in zip(updates.changes, delta_list.deltas):
+        ch.delta = delta
+
+    updated_bs = await apply_updates(full_bs, updates)
 
     pbar.update(1)
 

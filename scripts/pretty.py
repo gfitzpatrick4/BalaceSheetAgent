@@ -1,8 +1,21 @@
 from __future__ import annotations
 from typing import Iterable
 from itertools import zip_longest
-from models import FullBalanceSheet, BalanceSheetLine
+from models import FullBalanceSheet, BalanceSheetLine, BalanceSheetDelta
 from tabulate import tabulate         # pip install tabulate
+
+
+def _delta_summary(delta: BalanceSheetDelta) -> str:
+    parts = []
+    for section_name, entries in (
+        ("assets", delta.assets),
+        ("liabilities", delta.liabilities),
+        ("equity", delta.equity),
+    ):
+        for entry in entries:
+            for item, val in entry.items():
+                parts.append(f"{section_name}:{item}{val:+,.0f}")
+    return "; ".join(parts)
 
 
 def _flatten(lines: Iterable[BalanceSheetLine], indent: int = 0):
@@ -75,12 +88,10 @@ def pretty_print(original: FullBalanceSheet, updated: FullBalanceSheet | None = 
         print("Applied Updates: \n")
         rows = []
         for ch in updated.applied_updates:
-            deltas = "; ".join(
-                f"{d.section}:{d.line_item}{d.delta:+,.0f}" for d in ch.deltas
-            )
-            rows.append([ch.date, deltas, ch.citation])
+            summary = _delta_summary(ch.delta) if ch.delta else ""
+            rows.append([ch.date, ch.update_log, summary, ch.citation])
 
-        headers = ["Date", "Deltas", "Citation"]
+        headers = ["Date", "Update Log", "Deltas", "Citation"]
         print(tabulate(rows, headers=headers, tablefmt="github"))
 
     if getattr(updated,"update_errors", None):
@@ -88,10 +99,8 @@ def pretty_print(original: FullBalanceSheet, updated: FullBalanceSheet | None = 
         rows = []
         for err in updated.update_errors:
             ch = err.attempted_fix or err.change
-            deltas = "; ".join(
-                f"{d.section}:{d.line_item}{d.delta:+,.0f}" for d in ch.deltas
-            )
-            rows.append([err.change.date, deltas, ch.citation, err.reason])
-        
-        headers = ["Date", "Attemped Deltas", "Citation", "Reason"]
-        print(tabulate(rows,headers=headers,tablefmt="github"))
+            summary = _delta_summary(ch.delta) if ch.delta else ""
+            rows.append([err.change.date, ch.update_log, summary, ch.citation, err.reason])
+
+        headers = ["Date", "Update Log", "Attempted Deltas", "Citation", "Reason"]
+        print(tabulate(rows, headers=headers, tablefmt="github"))

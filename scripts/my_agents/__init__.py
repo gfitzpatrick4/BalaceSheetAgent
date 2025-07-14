@@ -4,7 +4,8 @@ from .liabilities  import make_liabilities_agent
 from .equity       import make_equity_agent
 from .assembler    import make_assembler_agent
 from .expander     import make_expander_agent
-from .update       import make_update_agent, make_fix_agent
+from .update       import make_update_agent
+from .accountant   import make_accountant_agent
 
 __all__ = [
     "make_assets_agent",
@@ -13,5 +14,5 @@ __all__ = [
     "make_assembler_agent",
     "make_expander_agent",
     "make_update_agent",
-    "make_fix_agent"
+    "make_accountant_agent"
 ]

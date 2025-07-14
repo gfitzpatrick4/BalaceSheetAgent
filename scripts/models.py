@@ -87,14 +87,34 @@ class FullBalanceSheet(BaseModel):
 BalanceSheetLine.model_rebuild()
 
 class BalanceSheetDelta(BaseModel):
-    section: Literal['assets','liabilities','equity']
-    line_item: str
-    delta: float
+    """Represents a single balanced change to the balance sheet."""
+
+    assets:      List[dict[str, float]] = Field(default_factory=list)
+    liabilities: List[dict[str, float]] = Field(default_factory=list)
+    equity:      List[dict[str, float]] = Field(default_factory=list)
+
+    def sum_assets(self) -> float:
+        return sum(v for d in self.assets for v in d.values())
+
+    def sum_liabilities(self) -> float:
+        return sum(v for d in self.liabilities for v in d.values())
+
+    def sum_equity(self) -> float:
+        return sum(v for d in self.equity for v in d.values())
+
+    @property
+    def balanced(self) -> bool:
+        return abs(self.sum_assets() - (self.sum_liabilities() + self.sum_equity())) < 0.01
+
+
+class BalanceSheetDeltaList(BaseModel):
+    deltas: List[BalanceSheetDelta]
 
 class FilingChange(BaseModel):
     date: str
-    deltas: List[BalanceSheetDelta]
+    update_log: str
     citation: str
+    delta: BalanceSheetDelta | None = None
 
 class FailedChange(BaseModel):
     """Represents an update that could not be applied without causing an imbalance."""
