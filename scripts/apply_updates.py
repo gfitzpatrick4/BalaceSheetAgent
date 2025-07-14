@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import json
 from typing import List
-
-from agents import Agent, Runner
 from models import (
     FullBalanceSheet,
     BalanceSheetLine,
@@ -11,27 +8,37 @@ from models import (
     FilingChange,
     UpdateSummary,
     FailedChange,
+    SectionTable,
 )
 
 
-def _apply_delta(bs: FullBalanceSheet, delta: BalanceSheetDelta) -> None:
-    section = getattr(bs, delta.section)
-    line = next((l for l in section.lines if l.line_item == delta.line_item), None)
+def _apply_line(section: SectionTable, line_item: str, delta_value: float) -> None:
+    line = next((l for l in section.lines if l.line_item == line_item), None)
     if line:
-        line.value = (line.value or 0.0) + delta.delta
+        line.value = (line.value or 0.0) + delta_value
     else:
-        section.lines.append(BalanceSheetLine(line_item=delta.line_item, value=delta.delta))
+        section.lines.append(BalanceSheetLine(line_item=line_item, value=delta_value))
+
+
+def _apply_delta(bs: FullBalanceSheet, delta: BalanceSheetDelta) -> None:
+    for entry in delta.assets:
+        for item, val in entry.items():
+            _apply_line(bs.assets, item, val)
+    for entry in delta.liabilities:
+        for item, val in entry.items():
+            _apply_line(bs.liabilities, item, val)
+    for entry in delta.equity:
+        for item, val in entry.items():
+            _apply_line(bs.equity, item, val)
 
 
 async def apply_updates(
     initial: FullBalanceSheet,
     summary: UpdateSummary,
-    fixer: Agent | None = None,
 ) -> FullBalanceSheet:
-    """Apply each FilingChange sequentially, verifying balance after every step.
+    """Apply each FilingChange sequentially verifying that each delta balances.
 
-    If a change introduces an imbalance it is sent to ``fixer`` for correction.
-    Unresolved changes are recorded on ``bs.update_errors``.
+    Any change whose delta causes an imbalance is recorded on ``bs.update_errors``.
     """
 
     bs = initial.model_copy(deep=True)
@@ -39,39 +46,25 @@ async def apply_updates(
     applied: List[FilingChange] = []
 
     for change in sorted(summary.changes, key=lambda c: c.date):
-        snapshot = bs.model_copy(deep=True)
+        if change.delta is None:
+            failed.append(FailedChange(change=change, reason="missing delta"))
+            continue
 
-        for delta in change.deltas:
-            _apply_delta(bs, delta)
+        if not change.delta.balanced:
+            failed.append(FailedChange(change=change, reason="delta not balanced"))
+            continue
+
+        snapshot = bs.model_copy(deep=True)
+        _apply_delta(bs, change.delta)
 
         if bs.balanced:
             applied.append(change)
-            continue
-
-        if fixer is not None:
-            resp = await Runner.run(
-                fixer,
-                json.dumps({
-                    "balance_sheet": snapshot.model_dump(),
-                    "change": change.model_dump(),
-                    "error": "Update caused imbalance. Provide corrected FilingChange",
-                }),
-            )
-            corrected: FilingChange = resp.final_output
-
-            bs_corrected = snapshot.model_copy(deep=True)
-            for delta in corrected.deltas:
-                _apply_delta(bs_corrected, delta)
-
-            if bs.balanced:
-                applied.append(corrected)
-                continue
-
-            failed.append(
-                FailedChange(change=change, attempted_fix=corrected, reason=f"still unbalanced by {bs_corrected.balance_difference():.2f}")
-            )
         else:
-            failed.append(FailedChange(change=change, reason="unbalanced"))
+            diff = bs.balance_difference()
+            bs = snapshot
+            failed.append(
+                FailedChange(change=change, reason=f"unbalanced by {diff:.2f} after apply")
+            )
 
     bs.shares_outstanding_common = summary.total_common_shares
     bs.shares_outstanding_preferred = summary.total_preferred_shares
