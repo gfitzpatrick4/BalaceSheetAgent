@@ -1,6 +1,5 @@
 from __future__ import annotations
 from typing import Iterable
-from itertools import zip_longest
 from models import FullBalanceSheet, BalanceSheetLine, BalanceSheetDelta
 from tabulate import tabulate         # pip install tabulate
 
@@ -64,17 +63,29 @@ def pretty_print(original: FullBalanceSheet, updated: FullBalanceSheet | None = 
         updated_section = next(t for t in updated.tables if t.section == section.section)
 
         orig_rows = list(_flatten(section.lines))
-        if section.subtotal:
-            orig_rows.append(["TOTAL " + section.section.upper(), f"{section.subtotal:,.0f}"])
-
         upd_rows = list(_flatten(updated_section.lines))
-        if updated_section.subtotal:
-            upd_rows.append(["TOTAL " + updated_section.section.upper(), f"{updated_section.subtotal:,.0f}"])
+
+        orig_map = {lbl: val for lbl, val in orig_rows}
+        upd_map = {lbl: val for lbl, val in upd_rows}
+
+        labels = [lbl for lbl, _ in orig_rows]
+        for lbl, _ in upd_rows:
+            if lbl not in orig_map:
+                labels.append(lbl)
 
         rows = []
-        for o, u in zip_longest(orig_rows, upd_rows, fillvalue=["", ""]):
-            label = o[0] if o[0] else u[0]
-            rows.append([label, o[1], u[1]])
+        for lbl in labels:
+            orig_val = orig_map.get(lbl, "0") if lbl not in orig_map else orig_map[lbl]
+            upd_val = upd_map.get(lbl, "")
+            rows.append([lbl, orig_val, upd_val])
+
+        total_orig = section.subtotal if section.subtotal is not None else section.total
+        total_upd = updated_section.subtotal if updated_section.subtotal is not None else updated_section.total
+        rows.append([
+            "TOTAL " + section.section.upper(),
+            f"{total_orig:,.0f}",
+            f"{total_upd:,.0f}",
+        ])
 
         headers = ["Line Item", original.filing_date, "Updated"]
         print(tabulate(rows, headers=headers, tablefmt="github"))
