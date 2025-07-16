@@ -26,6 +26,8 @@ import inspect
 from bs4 import BeautifulSoup
 import pprint as pprint
 import json
+import time
+import math
 from tqdm.auto import tqdm
 
 
@@ -70,7 +72,7 @@ async def build_balance_sheet(
     Returns both the fully expanded balance sheet from the filing and the
     pro forma balance sheet with subsequent updates applied.
     """
-
+    start_program = time.perf_counter()
     page = SubmissionPage(edgarCache=ec,url=index_url)
     filingDate = f"{page.metadata.get('Filing Date'):%Y-%m-%d}"
     if page.filers:
@@ -90,11 +92,15 @@ async def build_balance_sheet(
     pbar = tqdm(total=9, desc="Build balance sheet")
 
     # 2. Vector store (group all docs under one store)
+    start_vs = time.perf_counter()
     vs = create_vector_store(ec, name=f"{cik}_10Q_vector", urls=doc_urls,
                              client=openai_client)
+    vs_elapsed = time.perf_counter() - start_vs
+    pbar.write(f"Vector store creation took {vs_elapsed:.2f}s")
     
     pbar.update(1)
 
+    agents_start = time.perf_counter()
     tool = make_file_search_tool(vs.id, max_k=12)
 
     # 3. Instantiate agents (each factory just builds an Agent object + prompt)
@@ -104,10 +110,12 @@ async def build_balance_sheet(
     assembler_agent   = make_assembler_agent()      # no tool needed
 
     prompt = "Return the most recent balance sheet."
-
+    agents_elapsed = time.perf_counter() - agents_start
+    pbar.write(f"Section agent creation took {agents_elapsed:.2f}s")
     pbar.update(1)
 
     # 4. Run the three section agents in parallel
+    start_sections = time.perf_counter()
     async with asyncio.TaskGroup() as tg:
         t_assets      = tg.create_task(Runner.run(assets_agent,      prompt))
         t_liabilities = tg.create_task(Runner.run(liabilities_agent, prompt))
@@ -117,9 +125,14 @@ async def build_balance_sheet(
     liabilities_tbl = t_liabilities.result().final_output
     equity_tbl      = t_equity.result().final_output
 
+    sections_elapsed = time.perf_counter() - start_sections
+    pbar.write(f"Section agents took {sections_elapsed:.2f}s")
+
     pbar.update(1)
+    """
     expander = make_expander_agent(tool)
 
+    start_expand = time.perf_counter()
     async with asyncio.TaskGroup() as tg:
         ta = tg.create_task(Runner.run(expander, assets_tbl.model_dump_json()))
         tl = tg.create_task(Runner.run(expander, liabilities_tbl.model_dump_json()))
@@ -129,7 +142,11 @@ async def build_balance_sheet(
     liabilities_tbl = (await tl).final_output
     equity_tbl      = (await te).final_output
 
+    expand_elapsed = time.perf_counter() - start_expand
+    pbar.write(f"Expander agents took {expand_elapsed:.2f}s")
+    """
     pbar.update(1)
+    
     # 5. Assemble
     
     assembler_payload ={
@@ -160,10 +177,15 @@ async def build_balance_sheet(
     sub_urls = []
     for url in sub_urls_index:
         sub_urls.append([u for u in Util.GetRelatedUrls(str(ec.Get(url).content).replace("/ix?doc=",""))])
+
+    start_updates_vs = time.perf_counter()
     
     vs_updates = create_vector_store_for_updates(ec, name=f"{cik}_updates_vector", urls=sub_urls,
                                                   client=openai_client)
     
+    updates_vs_elapsed = time.perf_counter() - start_updates_vs
+    pbar.write(f"Updates vector store creation took {updates_vs_elapsed:.2f}s")
+
     pbar.update(1)
 
     tool_updates = make_file_search_tool(vs_updates.id, max_k=12)
@@ -172,21 +194,30 @@ async def build_balance_sheet(
 
     pbar.update(1)
 
+    start_update_agents = time.perf_counter()
     async with asyncio.TaskGroup() as tg:
         t_updates = tg.create_task(
             Runner.run(update_agent, full_bs.model_dump_json())
         )
 
     updates: UpdateSummary = (await t_updates).final_output
-
+    update_agents_elapsed = time.perf_counter() - start_update_agents
+    pbar.write(f"Update Agent run took {update_agents_elapsed:.2f}s")
     accountant_resp = await Runner.run(accountant_agent, updates.model_dump_json())
     delta_list: BalanceSheetDeltaList = accountant_resp.final_output
 
     for ch, delta in zip(updates.changes, delta_list.deltas):
         ch.delta = delta
 
+    
+    start_apply = time.perf_counter()
     updated_bs = await apply_updates(full_bs, updates)
+    apply_elapsed = time.perf_counter() - start_apply
+    pbar.write(f"Applying updates took {apply_elapsed:.2f}s")
 
     pbar.update(1)
+
+    total_elapsed = time.perf_counter() - start_program
+    pbar.write(f"The entire program took {math.floor(total_elapsed/60)} min and {total_elapsed%60:.2f}s")
 
     return full_bs, updated_bs

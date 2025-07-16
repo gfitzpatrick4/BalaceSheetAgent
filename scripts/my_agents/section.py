@@ -29,8 +29,7 @@ Return JSON that matches the SectionTable schema.  Requirements:
    add it to the `subtotal` field.
 4. Copy any foot-note symbol or reference into `note_ref`.
 5. Do not invent numbers or line items. If a number is missing, try again until you find it. 
-6. If there is a line item that represents a sum of smaller items, such as other, net, misc., search the whole document for the relevant details and include them
-as separate line items in the output.
+6. If a line item is a total or a subtotal of other line items in this section, DO NOT INCLUDE IT
 7. In the final output, do not include the Total of the entire section. 
 """
 

@@ -1,3 +1,16 @@
+"""
+Author: Griffin Fitzpatrick
+Date: 7/16/2025
+
+This script handles the application of balance sheet deltas. 
+It recieves an UpdateSummary of Balance Sheet Deltas and applys them to 
+the updated sheet. 
+"""
+
+
+
+
+
 from __future__ import annotations
 
 from typing import List
@@ -45,7 +58,7 @@ async def apply_updates(
     for change in sorted(summary.changes, key=lambda c: c.date):
         _apply_delta(bs, change.delta)
         applied.append(change)
-        
+
     bs.shares_outstanding_common = summary.total_common_shares
     bs.shares_outstanding_preferred = summary.total_preferred_shares
     bs.update_errors = failed or None
